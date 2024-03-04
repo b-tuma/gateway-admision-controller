@@ -321,19 +321,24 @@ func (cfg gatewayPodMutatorCfg) GatewayPodMutator(_ context.Context, adReview *k
 			// Create sidecar container
 			var sidecarContainerRunAsUser = int64(0) // Run init container as root
 			var sidecarContainerRunAsNonRoot = false
+			var containerPorts []corev1.ContainerPort
+
+			// Conditionally add the container port if we have a VxlanPort defined
+			if cfg.cmdConfig.VxlanPort != 0 {
+				containerPorts = append(containerPorts, corev1.ContainerPort{
+					Name:          "vxlan",
+					ContainerPort: cfg.cmdConfig.VxlanPort,
+					Protocol:      corev1.ProtocolUDP,
+				})
+			}
+
 			container := corev1.Container{
 				Name:    GATEWAY_SIDECAR_CONTAINER_NAME,
 				Image:   cfg.cmdConfig.SidecarImage,
 				Command: []string{cfg.cmdConfig.SidecarCmd},
 				// Args:                     []string{},
 				// WorkingDir:               "",
-				Ports: []corev1.ContainerPort{
-					{
-						Name:          "vxlan",
-						ContainerPort: 4789,
-						Protocol:      corev1.ProtocolUDP,
-					},
-				},
+				Ports: containerPorts,
 				// EnvFrom:                  []corev1.EnvFromSource{},
 				Env: []corev1.EnvVar{
 					{

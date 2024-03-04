@@ -32,6 +32,7 @@ type CmdConfig struct {
 	SidecarCmd                string
 	SidecarMountPoint         string
 	ConfigmapName             string
+	VxlanPort                 int32
 }
 
 var (
@@ -72,6 +73,8 @@ func NewCmdConfig() (*CmdConfig, error) {
 	app.Flag("sidecarMountPoint", "Mountpoint for configmap in sidecar container").StringVar(&c.SidecarMountPoint)
 
 	app.Flag("configmapName", "Name of the configmap to attach to containers").StringVar(&c.ConfigmapName)
+
+	app.Flag("vxlanPort", "Number of the UDP Vxlan port being used by the gateway pod").Int32Var(&c.VxlanPort)
 
 	_, err := app.Parse(os.Args[1:])
 	if err != nil {

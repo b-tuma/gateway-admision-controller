@@ -34,6 +34,7 @@ const (
 	testSidecarMountPoint   = "/mnt"
 	testConfigmapName       = "settings"
 	testNamespace           = "myNameSpace"
+	testVxlanPort           = 4789
 )
 
 func resolveDNSConfigValue(DNSList string) ([]string, error) {
@@ -51,7 +52,7 @@ func resolveDNSConfigValue(DNSList string) ([]string, error) {
 	return resolvedIPs, nil
 }
 
-func getExpectedPodSpec_gateway(gateway string, DNS string, initImage string, sidecarImage string) corev1.PodSpec {
+func getExpectedPodSpec_gateway(gateway string, DNS string, initImage string, sidecarImage string, vxlanPort int32) corev1.PodSpec {
 	DNS_ips, err := resolveDNSConfigValue(DNS)
 	if err != nil {
 		panic(err)
@@ -120,18 +121,21 @@ func getExpectedPodSpec_gateway(gateway string, DNS string, initImage string, si
 	var containers []corev1.Container
 	var sidecarContainerRunAsUser = int64(0) // Run init container as root
 	var sidecarContainerRunAsNonRoot = false
+	var containerPorts []corev1.ContainerPort
+	if vxlanPort != 0 {
+		containerPorts = append(containerPorts, corev1.ContainerPort{
+			Name:          "vxlan",
+			ContainerPort: vxlanPort,
+			Protocol:      corev1.ProtocolUDP,
+		})
+	}
+
 	if sidecarImage != "" {
 		containers = append(containers, corev1.Container{
 			Name:    mutator.GATEWAY_SIDECAR_CONTAINER_NAME,
 			Image:   sidecarImage,
 			Command: []string{testSidecarCmd},
-			Ports: []corev1.ContainerPort{
-				{
-					Name:          "vxlan",
-					ContainerPort: 4789,
-					Protocol:      corev1.ProtocolUDP,
-				},
-			},
+			Ports:   containerPorts,
 			Env: []corev1.EnvVar{
 				{
 					Name:  "gateway",
@@ -234,7 +238,7 @@ func getExpectedPodSpec_DNSPolicy(DNSPolicy string) corev1.PodSpec {
 }
 
 func getExpectedPodSpec_gateway_DNSPolicy(gateway string, DNS string, initImage string, sidecarImage string, DNSPolicy string) corev1.PodSpec {
-	spec := getExpectedPodSpec_gateway(gateway, DNS, initImage, sidecarImage)
+	spec := getExpectedPodSpec_gateway(gateway, DNS, initImage, sidecarImage, 0)
 	spec.DNSPolicy = corev1.DNSPolicy(DNSPolicy)
 
 	return spec
@@ -278,7 +282,7 @@ func TestGatewayPodMutator(t *testing.T) {
 			},
 			obj: &corev1.Pod{},
 			expObj: &corev1.Pod{
-				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, ""),
+				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, "", 0),
 			},
 		},
 		"Gateway name, init image": {
@@ -293,7 +297,7 @@ func TestGatewayPodMutator(t *testing.T) {
 			},
 			obj: &corev1.Pod{},
 			expObj: &corev1.Pod{
-				Spec: getExpectedPodSpec_gateway(testGatewayName, "", testInitImage, ""),
+				Spec: getExpectedPodSpec_gateway(testGatewayName, "", testInitImage, "", 0),
 			},
 		},
 		"Gateway IP, sidecar image": {
@@ -308,7 +312,7 @@ func TestGatewayPodMutator(t *testing.T) {
 			},
 			obj: &corev1.Pod{},
 			expObj: &corev1.Pod{
-				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", "", testSidecarImage),
+				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", "", testSidecarImage, 0),
 			},
 		},
 		"Gateway name, sidecar image": {
@@ -323,7 +327,7 @@ func TestGatewayPodMutator(t *testing.T) {
 			},
 			obj: &corev1.Pod{},
 			expObj: &corev1.Pod{
-				Spec: getExpectedPodSpec_gateway(testGatewayName, "", "", testSidecarImage),
+				Spec: getExpectedPodSpec_gateway(testGatewayName, "", "", testSidecarImage, 0),
 			},
 		},
 		"DNS": {
@@ -386,7 +390,7 @@ func TestGatewayPodMutator(t *testing.T) {
 						"setGateway": "true",
 					},
 				},
-				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, ""),
+				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, "", 0),
 			},
 		},
 		"setGatewayLabelValue='foo' - it should set gateway since label value matches the config": {
@@ -414,7 +418,7 @@ func TestGatewayPodMutator(t *testing.T) {
 						"setGateway": "foo",
 					},
 				},
-				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, ""),
+				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, "", 0),
 			},
 		},
 		"setGatewayLabelValue='foo' - it should be a NOP since label value does not match the config": {
@@ -494,7 +498,7 @@ func TestGatewayPodMutator(t *testing.T) {
 						"setGateway": "true",
 					},
 				},
-				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, ""),
+				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, "", 0),
 			},
 		},
 		"setGatewayAnnotationValue='foo' - it should set gateway since annotation value matches the config": {
@@ -522,7 +526,7 @@ func TestGatewayPodMutator(t *testing.T) {
 						"setGateway": "foo",
 					},
 				},
-				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, ""),
+				Spec: getExpectedPodSpec_gateway(testGatewayIP, "", testInitImage, "", 0),
 			},
 		},
 		"setGatewayAnnotationValue='foo' - it should be a NOP since annotation value does not match the config": {
@@ -584,6 +588,22 @@ func TestGatewayPodMutator(t *testing.T) {
 					Namespace: testNamespace,
 				},
 				Spec: getExpectedPodSpec_gateway_DNSPolicy(testGatewayIP, testDNSIP, testInitImage, "", testDNSPolicy),
+			},
+		},
+		"VxlanPort": {
+			cmdConfig: config.CmdConfig{
+				SetGatewayDefault:   true,
+				Gateway:             testGatewayName,
+				SidecarImage:        testSidecarImage,
+				SidecarCmd:          testSidecarCmd,
+				SidecarImagePullPol: testSidecarImagePullPol,
+				SidecarMountPoint:   testSidecarMountPoint,
+				ConfigmapName:       testConfigmapName,
+				VxlanPort:           testVxlanPort,
+			},
+			obj: &corev1.Pod{},
+			expObj: &corev1.Pod{
+				Spec: getExpectedPodSpec_gateway(testGatewayName, "", "", testSidecarImage, testVxlanPort),
 			},
 		},
 	}
