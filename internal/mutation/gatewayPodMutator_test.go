@@ -125,6 +125,13 @@ func getExpectedPodSpec_gateway(gateway string, DNS string, initImage string, si
 			Name:    mutator.GATEWAY_SIDECAR_CONTAINER_NAME,
 			Image:   sidecarImage,
 			Command: []string{testSidecarCmd},
+			Ports: []corev1.ContainerPort{
+				{
+					Name:          "vxlan",
+					ContainerPort: 4789,
+					Protocol:      corev1.ProtocolUDP,
+				},
+			},
 			Env: []corev1.EnvVar{
 				{
 					Name:  "gateway",

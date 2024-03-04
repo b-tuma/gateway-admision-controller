@@ -327,7 +327,13 @@ func (cfg gatewayPodMutatorCfg) GatewayPodMutator(_ context.Context, adReview *k
 				Command: []string{cfg.cmdConfig.SidecarCmd},
 				// Args:                     []string{},
 				// WorkingDir:               "",
-				// Ports:                    []corev1.ContainerPort{},
+				Ports: []corev1.ContainerPort{
+					{
+						Name:          "vxlan",
+						ContainerPort: 4789,
+						Protocol:      corev1.ProtocolUDP,
+					},
+				},
 				// EnvFrom:                  []corev1.EnvFromSource{},
 				Env: []corev1.EnvVar{
 					{
